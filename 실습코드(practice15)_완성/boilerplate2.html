@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+    </head>
+    <body>
+        <svg width="960" height="500"></svg>
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script src="time_series_data.js"></script>
+        <script>
+            var parseDate = d3.timeParse("%b-%y");
+
+            function type(d){
+                d.date = parseDate(d.date);
+                d.price = +d.price;
+                d.cost = +d.cost;
+                return d;
+            }
+
+            function translator(x, y){
+                return 'translate(' + x + ',' + y + ')';
+            }
+
+            data = data.map(type);
+
+            var svg = d3.select('svg');
+
+            // margin, margin2로 나뉜것을 detail_margin, overview_margin으로 나눔
+            var detail_margin = {
+                top: 20,
+                right: 20,
+                bottom: 110,
+                left: 40
+            };
+
+            var overview_margin = {
+                top: 430,
+                right: 20,
+                bottom: 30,
+                left: 40
+            };
+
+            // 단순히 width / height, height2 이렇게 3개로 나눈 것을 이해하기 쉽게
+            // detail의 width, height 와 overview의 width와  height로 나눈다.
+            // var detail_width = +svg.attr('width') - detail_margin.left - detail_margin.right;
+            // var detail_height = +svg.attr('height') - detail_margin.top - detail_margin.bottom;
+            // var overview_width = +svg.attr('width') - overview_margin.left - overview_margin.right;
+            // var overview_height = +svg.attr('height') - overview_margin.top - overview_margin.bottom;
+
+            var detail_width = detail.width;
+            var detail_height = detail.hegiht;
+            var overview_width = overview.width;
+            var overview_height = overview.height;
+
+            // clipPath부분도 width와 height로 표혀되던 것이
+            // detail_width, detail_heihgt 부분으로 표현된다.
+            svg.append('defs').append('clipPath')
+                .attr('id', 'clip')
+                .append('rect')
+                .attr('width', detail_width)
+                .attr('height', detail_height);
+
+            var detail = svg.append('g')
+                .attr('transform', translator(detail_margin.left, detail_margin.top));
+
+            var overview = svg.append('g')
+                .attr('transform', translator(overview_margin.left, overview_margin.top));
+
+            // var detail_x = d3.scaleTime()
+            //     .domain(d3.extent(data, function(d){
+            //         return d.date;
+            //     }))
+            //     .range([0, detail_width]);
+            //
+            // var detail_y = d3.scaleLinear()
+            //     .domain([0, d3.max(data, function(d){
+            //         return d.price;
+            //     })])
+            //     .range([detail_height, 0]);
+            //
+            // var overview_x = d3.scaleTime()
+            //     .domain(d3.extent(data, function(d){
+            //         return d.date;
+            //     }))
+            //     .range([0, overview_width]);
+            //
+            // var overview_y = d3.scaleLinear()
+            //     .domain([0, d3.max(data, function(d){
+            //         return d.price;
+            //     })])
+            //     .range([overview_height, 0]);
+
+
+            // 위의 Scale부분을 아래처럼 구할 수 있다.
+            function setScales(render_area){
+              var scales = {};
+              scales.x = d3.scaleTime()
+                  .domain(d3.extent(data,function(d){ return d.date; }))
+                  .range([0, render_area.width]);
+              scales.y = d3.scaleLinear()
+                  .domain([0, d3.max(data, function(d){ return d.price; })])
+                  .range([render_area.height, 0]);
+              return scales;
+            }
+
+            var detail_scales = setScales(detail);
+            var detail_x = detail_scales.x;
+            var detail_y = detail_scales.y;
+
+            var overview_scales = setScales(overview);
+            var overview_x = overview_scales.x;
+            var overview_y = overview_scales.y;
+
+            // set setScales function을 이용해서 위와같이 x,y축의 범위를 간단하게 잡아주었음
+            // function쓰기 전에 비효율적인 코드는 아래와 같음
+
+            // var detail_xAxis = d3.axisBottom(detail_x);
+            // var detail_yAxis = d3.axisLeft(detail_y);
+            // var overview_xAxis = d3.axisBottom(overview_x);
+            // var overview_yAxis = d3.axisLeft(overview_y);
+
+
+            // 축을 구하는 코드를 간단하게 해보자.
+            function setAxes(render_area, isDetail=true){
+              var scales = render_area.scales = render_area.scales || setScales(render_area)
+              var axes ={};
+              axes.x = d3.axisBottom(scales.x);
+              axes.y = d3.axisLeft(scales.y);
+              render_area.append("g")
+                    .attr("class", isDetail ? "axis--x" : "non-detail-axis")
+                    .attr('transform', translator(0, render_area.height))
+                    .call(axes.x);
+              render_area.append("g")
+                    .call(axes.y);
+              render_area.axes = axes;
+              return axes;
+            }
+
+            var detail_axes = setAxes(detail);
+            var detail_xAxis = detail_axes.x;
+            var detail_yAxis = detail_axes.y;
+
+            var overview_axes = setAxes(overview, false);
+            overview_xAxis = overview_axes.x;
+            overview_yAxis = overview_axes.y;
+
+            // detail.append('g')
+            //     .attr('class', 'axis--x')
+            //     .attr('transform', translator(0, detail_height))
+            //     .call(detail_xAxis);
+            //
+            // detail.append('g')
+            //     .call(detail_yAxis);
+            //
+            // overview.append('g')
+            //     .attr('transform', translator(0, overview_height))
+            //     .call(overview_xAxis);
+            //
+            // overview.append('g')
+            //     .call(overview_yAxis);
+
+
+            // 에어리어 차트 렌더를 간단하게 하는 코드(그래프 부분)
+            function render(render_area, data, isDetail=true) {
+              var axes = render_area.axes = render_area.axes || setAxes(render_area);
+              var path = d3.area()
+                  .x(function(d){ return render_area.scales.x(d.date); })
+                  .y1(function(d){ return render_area.scales.y(d.price); })
+                  .y0(render_area.height)
+                  .curve(d3.curveMonotoneX);
+              render_area.path = path;
+              render_area.append("path")
+                    .attr("class", isDetail ? "area" : null)
+                    .datum(data)
+                    .attr("fill", "steelblue")
+                    .attr("clip-path", isDetail ? "url(#clip)" : null)
+                    .attr("d", path);
+              return render_area
+            }
+
+            var detail_area = render(detail, data).path;
+            var overview_area = render(overview, data, false).path;
+
+            // 에어리어 차트 렌더의 이전 코드는 아래와 같다
+
+            // var detail_area = d3.area()
+            //     .x(function(d){
+            //         return detail_x(d.date);
+            //     })
+            //     .y1(function(d){
+            //         return detail_y(d.price);
+            //     })
+            //     .y0(detail_height)
+            //     .curve(d3.curveMonotoneX);
+            //
+            // detail.append('path')
+            //     .attr('class', 'area')
+            //     .datum(data)
+            //     .attr('fill', 'steelblue')
+            //     .attr('clip-path', 'url(#clip)')
+            //     .attr('d', detail_area);
+            //
+            //
+            //
+            // var overview_area = d3.area()
+            //     .x(function(d){
+            //         return overview_x(d.date);
+            //     })
+            //     .y1(function(d){
+            //         return overview_y(d.price);
+            //     })
+            //     .y0(overview_height)
+            //     .curve(d3.curveMonotoneX);
+            //
+            // overview.append('path')
+            //     .datum(data)
+            //     .attr('fill', 'steelblue')
+            //     .attr('d', overview_area);
+            //
+
+            // 브러쉬를 간단하게 만들어 주는 코드
+            var bursh = d3.brushX()
+                .extent([[0,0],[overview.width, overview.height]])
+                .on('brush end', function(){
+                    brushed(overview, detail);
+                })
+
+            overview.append("g")
+                .call(brush)
+                .call(brush.move, overview.scales.x.range())
+
+            function brushed(overview, detail){
+              var s = d3.event.selection || overview.scafles.x.range();
+              var new_domain = s.map(overview.scales.x.invert);
+              detail.scales.x.domain(new_domain);
+              detail.select(".area").attr("d", detail.path);
+              detail.select(".axis--x").call(detail.axes.x);
+            }
+
+            // var brush = d3.brushX()
+            //     .extent([[0, 0], [overview_width, overview_height]])
+            //     .on('brush end', brushed)
+            //
+            // overview.append('g')
+            //     .call(brush)
+            //     .call(brush.move, overview_x.range())
+            //
+            // function brushed(){
+            //     var s = d3.event.selection || overview_x.range();
+            //     var new_domain = s.map(overview_x.invert);
+            //     detail_x.domain(new_domain);
+            //     detail.select('.area').attr('d', detail_area);
+            //     detail.select('.axis--x').call(detail_xAxis);
+            // }
+        </script>
+    </body>
+</html>

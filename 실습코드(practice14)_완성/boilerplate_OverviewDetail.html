@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8">
+    </head>
+    <body>
+        <svg width="960" height="500"></svg>
+        <script src="https://d3js.org/d3.v4.min.js"></script>
+        <script src="time_series_data.js"></script>
+        <script>
+          var parseDate = d3.timeParse("%b-%y");
+
+          function type(d) {
+            d.date = parseDate(d.date);
+            d.price = +d.price;
+            d.cost = d.cost;
+            return d;
+          }
+
+          data = data.map(type);
+
+          var svg = d3.select("svg");
+          var margin = {top: 20, right: 20, bottom: 110, left:40};
+          var margin2 = {top: 430, right: 20, bottom: 30, left: 40};
+          var width = +svg.attr("width") - margin.left - margin.right;
+          var height = +svg.attr("height") - margin.top - margin.bottom;
+          var height2 = +svg.attr("height") - margin2.top - margin2.bottom;
+
+          // Chart가 그려질 공간(영역)설정
+          var detail = svg.append("g")
+              .attr("transform", "translate(" + margin.left + "," + margin.top +")");
+
+          var overview = svg.append("g")
+              .attr("transform", "translate(" + margin2.left + "," + margin2.top + ")");
+
+          // Scale 설정
+          var x = d3.scaleTime() // 시간이니깐 scaleTime()
+          .domain(d3.extent(data, function(d) { return d.date; }))
+          .range([0, width]);
+
+          var x2 = d3.scaleTime()
+          .domain(x.domain())
+          .range(x.range());
+
+          var y = d3.scaleLinear() // price니깐 scaleLinear()
+          .domain([0, d3.max(data, function(d) { return d.price;})])
+          .range([height, 0]);
+
+          var y2 = d3.scaleLinear()
+          .domain(y.domain())
+          .range([height2, 0]);
+
+          // 축 그리기
+          var xAxis = d3.axisBottom(x);
+          var xAxis2 = d3.axisBottom(x2);
+          var yAxis = d3.axisLeft(y);
+
+          // area 값 구하기 : area는 line과 마찬가지로 배열을 입력 받는 함수이다!!!
+          var area_detail = d3.area()
+              .x(function(d) { return x(d.date); })
+              .y1(function(d) { return y(d.price); })
+              .y0(height)
+              .curve(d3.curveMonotoneX);
+
+          svg.append("defs").append("clipPath")
+          .attr("id", "clip")
+          .append("rect")
+          .attr("width", width)
+          .attr("height", height);
+
+          detail.append("path")
+          .attr("class", "area")
+          .datum(data)
+          .attr("fill", "steelblue")
+          .attr("clip-path", "url(#clip)")
+          .attr("d", area_detail);
+
+          var area_overview = d3.area()
+          .x(function(d) { return x2(d.date); })
+          .y1(function(d) { return y2(d.price); })
+          .y0(height2)
+          .curve(d3.curveMonotoneX);
+
+          overview.append("path")
+          .datum(data)
+          .attr("fill", "steelblue")
+          .attr("d", area_overview);
+
+          // 축 범위 설정
+          detail.append("g")
+          .attr("class", "axis--x")
+          .attr("transform", "translate(0," + height + ")")
+          .call(xAxis);
+
+          detail.append("g")
+          .call(yAxis);
+
+          overview.append("g")
+          .attr("transform", "translate(0," + height2 + ")")
+          .call(xAxis2);
+
+          // Brush 생성 및 설정
+          var brush = d3.brushX()
+          .extent([[0, 0], [width, height2]])
+          .on("brush end", brushed);
+
+          overview.append("g")
+          .call(brush)
+          .call(brush.move, x.range());
+
+          function brushed() {
+              var s = d3.event.selection || x2.range()
+              x.domain(s.map(x2.invert));
+              detail.select(".area").attr("d", area_detail);
+              detail.select(".axis--x").call(xAxis);
+          }
+
+
+
+        </script>
+    </body>
+</html>
